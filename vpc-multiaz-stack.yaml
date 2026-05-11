@@ -1,22 +1,26 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Multi-AZ VPC with public and private subnets, NAT Gateways, Apache web tier, and SSM-managed EC2 instances.
-
+AWSTemplateFormatVersion: "2010-09-09"
+Description: BEM11 Secure Multi-AZ VPC with NAT, EC2, and SSM-only access
+# ─────────────────────────────
+# PARAMETERS
+# ─────────────────────────────
 Parameters:
-
   StudentName:
     Type: String
     Default: "Eugene Anokye"
-
   LabName:
     Type: String
-    Default: "Multi-AZ VPC Lab"
-
-  LatestAmiId:
+    Default: "BEM11 Lab"
+  InstanceType:
+    Type: String
+    Default: t3.micro
+  AmiId:
+    Description: The latest Amazon Linux 2 AMI from the Parameter Store
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-
+# ─────────────────────────────
+# NETWORKING (VPC)
+# ─────────────────────────────
 Resources:
-
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -25,21 +29,17 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: MultiAZ-VPC
-
-  InternetGateway:
+          Value: Demo-VPC
+  IGW:
     Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: MultiAZ-IGW
-
-  IGWAttachment:
+  AttachIGW:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
+      InternetGatewayId: !Ref IGW
+# ─────────────────────────────
+# SUBNETS (2 AZs)
+# ─────────────────────────────
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -49,8 +49,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: Public-Subnet-AZ1
-
+          Value: Demo-Public-Subnet-1
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -60,166 +59,117 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: Public-Subnet-AZ2
-
+          Value: Demo-Public-Subnet-2
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
       AvailabilityZone: !Select [0, !GetAZs ""]
-      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: Private-Subnet-AZ1
-
+          Value: Demo-Private-Subnet-1
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.12.0/24
       AvailabilityZone: !Select [1, !GetAZs ""]
-      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: Private-Subnet-AZ2
-
+          Value: Demo-Private-Subnet-2
+# ─────────────────────────────
+# NAT GATEWAYS (HIGH AVAILABILITY)
+# ─────────────────────────────
   EIP1:
     Type: AWS::EC2::EIP
-    DependsOn: IGWAttachment
+    DependsOn: AttachIGW
     Properties:
       Domain: vpc
-
   EIP2:
     Type: AWS::EC2::EIP
-    DependsOn: IGWAttachment
+    DependsOn: AttachIGW
     Properties:
       Domain: vpc
-
-  NatGateway1:
+  NAT1:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt EIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: NAT-AZ1
-
-  NatGateway2:
+  NAT2:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt EIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: NAT-AZ2
-
-  PublicRouteTable:
+# ─────────────────────────────
+# ROUTING
+# ─────────────────────────────
+  PublicRT:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: Public-RT
-
+          Value: Demo-Public-RT
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: IGWAttachment
+    DependsOn: AttachIGW
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RTAssociation:
+      RouteTableId: !Ref PublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+  PublicAssoc1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RTAssociation:
+      RouteTableId: !Ref PublicRT
+  PublicAssoc2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  PrivateRouteTable1:
+      RouteTableId: !Ref PublicRT
+  PrivateRT1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: Private-RT-AZ1
-
+          Value: Demo-Private-RT-1
   PrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: "0.0.0.0/0"
-      NatGatewayId: !Ref NatGateway1
-
-  PrivateSubnet1RTAssociation:
+      RouteTableId: !Ref PrivateRT1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NAT1
+  PrivateAssoc1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable1
-
-  PrivateRouteTable2:
+      RouteTableId: !Ref PrivateRT1
+  PrivateRT2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: Private-RT-AZ2
-
+          Value: Demo-Private-RT-2
   PrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: "0.0.0.0/0"
-      NatGatewayId: !Ref NatGateway2
-
-  PrivateSubnet2RTAssociation:
+      RouteTableId: !Ref PrivateRT2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NAT2
+  PrivateAssoc2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable2
-
-  WebSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow HTTP from internet and ICMP from VPC. No SSH.
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: "0.0.0.0/0"
-        - IpProtocol: icmp
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 10.0.0.0/16
-      Tags:
-        - Key: Name
-          Value: Web-SG
-
-  AppSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow ICMP from VPC only. No SSH.
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: icmp
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 10.0.0.0/16
-      Tags:
-        - Key: Name
-          Value: App-SG
-
-  SSMInstanceRole:
+      RouteTableId: !Ref PrivateRT2
+# ─────────────────────────────
+# IAM ROLE (SSM ONLY ACCESS)
+# ─────────────────────────────
+  SSMRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: EC2-SSM-Only-Role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -227,129 +177,126 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPoliciesARN:
-       - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Tags:
-        - Key: Name
-          Value: EC2-SSM-Only-Role
-
-  SSMInstanceProfile:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+  InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: EC2-SSM-Only-Profile
-      Roles:
-        - !Ref SSMInstanceRole
-
-  WebInstance1:
+      Roles: [!Ref SSMRole]
+# ─────────────────────────────
+# SECURITY GROUPS
+# ─────────────────────────────
+  PublicSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Public Web SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/16
+  PrivateSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Private SG
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/16
+# ─────────────────────────────
+# EC2 INSTANCES (2 PUBLIC + 2 PRIVATE)
+# ─────────────────────────────
+  Web1:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
-      ImageId: !Ref LatestAmiId
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet1
-      IamInstanceProfile: !Ref SSMInstanceProfile
-      SecurityGroupIds:
-        - !Ref WebSecurityGroup
+      SecurityGroupIds: [!Ref PublicSG]
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: Web-Server-1
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          yum update -y
-          yum install -y httpd
+          dnf install -y httpd
           systemctl enable httpd
           systemctl start httpd
-          cat > /var/www/html/index.html <<EOF
-          <!DOCTYPE html>
-          <html>
-          <head><title>${LabName}</title></head>
-          <body>
-            <h1>${LabName}</h1>
-            <p>Student: ${StudentName}</p>
-            <p>Server: AZ1</p>
-          </body>
-          </html>
-          EOF
-      Tags:
-        - Key: Name
-          Value: Web-AZ1
-
-  WebInstance2:
+          # Fetch the latest metadata token for EC2 instance metadata service (IMDSv2)
+          TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+          # Fetch the Availability Zone information using IMDSv2
+          AZ=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone`
+          # Fetch the instance ID using IMDSv2
+          INSTANCEID=`curl -s http://169.254.169.254/latest/meta-data/instance-id -H "X-aws-ec2-metadata-token: $TOKEN"`
+          #Create or overwrite the index.html file with the instance information
+          echo "<h1>${StudentName}</h1><h2>${LabName}</h2><p>Instance ID: $INSTANCEID, Availability Zone: $AZ Web Server</p>" > /var/www/html/index.html
+  Web2:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
-      ImageId: !Ref LatestAmiId
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet2
-      IamInstanceProfile: !Ref SSMInstanceProfile
-      SecurityGroupIds:
-        - !Ref WebSecurityGroup
+      SecurityGroupIds: [!Ref PublicSG]
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: Web-Server-2
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          yum update -y
-          yum install -y httpd
+          dnf install -y httpd
           systemctl enable httpd
           systemctl start httpd
-          cat > /var/www/html/index.html <<EOF
-          <!DOCTYPE html>
-          <html>
-          <head><title>${LabName}</title></head>
-          <body>
-            <h1>${LabName}</h1>
-            <p>Student: ${StudentName}</p>
-            <p>Server: AZ2</p>
-          </body>
-          </html>
-          EOF
-      Tags:
-        - Key: Name
-          Value: Web-AZ2
-
-  AppInstance1:
+          # Fetch the latest metadata token for EC2 instance metadata service (IMDSv2)
+          TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+          # Fetch the Availability Zone information using IMDSv2
+          AZ=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone`
+          # Fetch the instance ID using IMDSv2
+          INSTANCEID=`curl -s http://169.254.169.254/latest/meta-data/instance-id -H "X-aws-ec2-metadata-token: $TOKEN"`
+          #Create or overwrite the index.html file with the instance information
+          echo "<h1>${StudentName}</h1><h2>${LabName}</h2><p>Instance ID: $INSTANCEID, Availability Zone: $AZ Web Server</p>" > /var/www/html/index.html
+  App1:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
-      ImageId: !Ref LatestAmiId
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1
-      IamInstanceProfile: !Ref SSMInstanceProfile
-      SecurityGroupIds:
-        - !Ref AppSecurityGroup
+      SecurityGroupIds: [!Ref PrivateSG]
+      IamInstanceProfile: !Ref InstanceProfile
       Tags:
         - Key: Name
-          Value: App-AZ1
-
-  AppInstance2:
+          Value: App-Server-1
+  App2:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
-      ImageId: !Ref LatestAmiId
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2
-      IamInstanceProfile: !Ref SSMInstanceProfile
-      SecurityGroupIds:
-        - !Ref AppSecurityGroup
+      SecurityGroupIds: [!Ref PrivateSG]
+      IamInstanceProfile: !Ref InstanceProfile
       Tags:
         - Key: Name
-          Value: App-AZ2
-
+          Value: App-Server-2
+# ─────────────────────────────
+# OUTPUTS (IMPORTANT FOR DEMO)
+# ─────────────────────────────
 Outputs:
-
-  WebInstance1PublicIP:
-    Description: Public IP - Web AZ1
-    Value: !GetAtt WebInstance1.PublicIp
-
-  WebInstance2PublicIP:
-    Description: Public IP - Web AZ2
-    Value: !GetAtt WebInstance2.PublicIp
-
-  WebInstance1Id:
-    Description: Instance ID - Web AZ1
-    Value: !Ref WebInstance1
-
-  WebInstance2Id:
-    Description: Instance ID - Web AZ2
-    Value: !Ref WebInstance2
-
-  AppInstance1Id:
-    Description: Instance ID - App AZ1
-    Value: !Ref AppInstance1
-
-  AppInstance2Id:
-    Description: Instance ID - App AZ2
-    Value: !Ref AppInstance2
+  Web1URL:
+    Value: !Sub "http://${Web1.PublicDnsName}"
+  Web2URL:
+    Value: !Sub "http://${Web2.PublicDnsName}"
+  PrivateApp1Id:
+    Value: !Ref App1
+  PrivateApp2Id:
+    Value: !Ref App2
+  VPCId:
+    Value: !Ref VPC

@@ -1,8 +1,16 @@
-template-file-path: ./vpc-multiaz-stack.yaml
+template-file-path: vpc-lab.yaml
+stack-name: bem11-vpc-lab
+region: eu-north-1
+capabilities:
+  - CAPABILITY_IAM
+  - CAPABILITY_NAMED_IAM
 parameters:
   StudentName: "Eugene Anokye"
-  LabName: "Multi-AZ VPC Lab"
+  LabName: "BEM11 Lab"
+  InstanceType: t3.micro
 tags:
-  Project: MultiAZ-VPC-Lab
+  Project: BEM11-Networking-Lab
   Environment: Lab
-  ManagedBy: CloudFormation-GitSync
+  ManagedBy: GitSync-CloudFormation
+
+ 

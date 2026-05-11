@@ -1,4 +1,4 @@
-template-file-path: vpc-lab.yaml
+template-file-path: vpc-multiaz-stack.yaml
 stack-name: bem11-vpc-lab
 region: eu-north-1
 capabilities:

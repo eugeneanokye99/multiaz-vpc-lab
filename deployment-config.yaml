@@ -6,3 +6,5 @@ tags:
   Project: MultiAZ-VPC-Lab
   Environment: Lab
   ManagedBy: CloudFormation-GitSync
+
+  region

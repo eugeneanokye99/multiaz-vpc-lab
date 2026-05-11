@@ -1,0 +1,581 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Highly Available Multi-AZ VPC with Public/Private Subnets, NAT Gateways, Apache Web Tier, Private App Tier, and SSM Session Manager access.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcCidr
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+          - PrivateSubnet1Cidr
+          - PrivateSubnet2Cidr
+      - Label:
+          default: "Compute Configuration"
+        Parameters:
+          - InstanceType
+          - LatestAmiId
+      - Label:
+          default: "Identification"
+        Parameters:
+          - StudentName
+          - LabName
+          - ProjectTag
+    ParameterLabels:
+      VpcCidr:           { default: "VPC CIDR Block" }
+      PublicSubnet1Cidr: { default: "Public Subnet AZ-1 CIDR" }
+      PublicSubnet2Cidr: { default: "Public Subnet AZ-2 CIDR" }
+      PrivateSubnet1Cidr: { default: "Private Subnet AZ-1 CIDR" }
+      PrivateSubnet2Cidr: { default: "Private Subnet AZ-2 CIDR" }
+      InstanceType:      { default: "EC2 Instance Type" }
+      LatestAmiId:       { default: "Amazon Linux 2 AMI (SSM Parameter)" }
+      StudentName:       { default: "Your Full Name (shown on webpage)" }
+      LabName:           { default: "Lab Name (shown on webpage)" }
+      ProjectTag:        { default: "Project Tag Value" }
+
+Parameters:
+
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: CIDR block for the custom VPC.
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: "10.0.1.0/24"
+    Description: CIDR for Public Subnet in AZ-1.
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: "10.0.2.0/24"
+    Description: CIDR for Public Subnet in AZ-2.
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: "10.0.11.0/24"
+    Description: CIDR for Private Subnet in AZ-1.
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: "10.0.12.0/24"
+    Description: CIDR for Private Subnet in AZ-2.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+    Description: EC2 instance type for all four instances.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: SSM parameter path for the latest Amazon Linux 2 AMI.
+
+  StudentName:
+    Type: String
+    Default: "Jane Doe"
+    Description: Full name displayed on the Apache web page.
+
+  LabName:
+    Type: String
+    Default: "Multi-AZ VPC Lab"
+    Description: Lab name displayed on the Apache web page.
+
+  ProjectTag:
+    Type: String
+    Default: "MultiAZ-VPC-Lab"
+    Description: Value applied to the Project tag on all resources.
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-VPC"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-IGW"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Public-Subnet-AZ1"
+        - Key: Tier
+          Value: Public
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Public-Subnet-AZ2"
+        - Key: Tier
+          Value: Public
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Private-Subnet-AZ1"
+        - Key: Tier
+          Value: Private
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Private-Subnet-AZ2"
+        - Key: Tier
+          Value: Private
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  EIP1:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-EIP-AZ1"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  EIP2:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-EIP-AZ2"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-NAT-AZ1"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-NAT-AZ2"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Public-RT"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Private-RT-AZ1"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Private-RT-AZ2"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectTag}-Web-SG"
+      GroupDescription: Allow HTTP from internet and ICMP from VPC. No SSH.
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTP from internet"
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr
+          Description: "ICMP from within VPC"
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+          Description: "All outbound traffic"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Web-SG"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectTag}-App-SG"
+      GroupDescription: Allow ICMP from VPC only. No inbound SSH or HTTP.
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr
+          Description: "ICMP from within VPC"
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+          Description: "All outbound traffic"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-App-SG"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectTag}-SSM-Instance-Role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-SSM-Instance-Role"
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectTag}-SSM-Instance-Profile"
+      Roles:
+        - !Ref SSMInstanceRole
+
+  WebInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType:
+        Ref: InstanceType
+      ImageId: 
+        Ref: LatestAmiId
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl enable httpd
+          systemctl start httpd
+          cat > /var/www/html/index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${LabName}</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto;
+                     background: #f0f4f8; color: #333; text-align: center; }
+              .card { background: white; border-radius: 12px; padding: 40px;
+                      box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+              h1 { color: #1a73e8; }
+              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8;
+                       padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
+              .az { font-size: 0.85em; color: #666; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>&#x1F310; ${LabName}</h1>
+              <p><strong>Student:</strong> ${StudentName}</p>
+              <span class="badge">Web Server - AZ1</span>
+              <p class="az">Instance: $(hostname -f) &nbsp;|&nbsp; AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+            </div>
+          </body>
+          </html>
+          EOF
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Web-AZ1"
+        - Key: Tier
+          Value: Web
+        - Key: AZ
+          Value: AZ1
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  WebInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref PublicSubnet2
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl enable httpd
+          systemctl start httpd
+          cat > /var/www/html/index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${LabName}</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto;
+                     background: #f0f4f8; color: #333; text-align: center; }
+              .card { background: white; border-radius: 12px; padding: 40px;
+                      box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+              h1 { color: #1a73e8; }
+              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8;
+                       padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
+              .az { font-size: 0.85em; color: #666; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>&#x1F310; ${LabName}</h1>
+              <p><strong>Student:</strong> ${StudentName}</p>
+              <span class="badge">Web Server - AZ2</span>
+              <p class="az">Instance: $(hostname -f) &nbsp;|&nbsp; AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+            </div>
+          </body>
+          </html>
+          EOF
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-Web-AZ2"
+        - Key: Tier
+          Value: Web
+        - Key: AZ
+          Value: AZ2
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  AppInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref PrivateSubnet1
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SecurityGroupIds:
+        - !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-App-AZ1"
+        - Key: Tier
+          Value: App
+        - Key: AZ
+          Value: AZ1
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  AppInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref PrivateSubnet2
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      SecurityGroupIds:
+        - !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectTag}-App-AZ2"
+        - Key: Tier
+          Value: App
+        - Key: AZ
+          Value: AZ2
+        - Key: Project
+          Value: !Ref ProjectTag
+
+Outputs:
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${ProjectTag}-VPC-ID"
+
+  PublicSubnet1Id:
+    Description: Public Subnet AZ1 ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Public Subnet AZ2 ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: Private Subnet AZ1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Private Subnet AZ2 ID
+    Value: !Ref PrivateSubnet2
+
+  NatGateway1EIP:
+    Description: Elastic IP of NAT Gateway AZ1
+    Value: !Ref EIP1
+
+  NatGateway2EIP:
+    Description: Elastic IP of NAT Gateway AZ2
+    Value: !Ref EIP2
+
+  WebInstance1PublicIP:
+    Description: Public IP of Web Server AZ1
+    Value: !GetAtt WebInstance1.PublicIp
+
+  WebInstance2PublicIP:
+    Description: Public IP of Web Server AZ2
+    Value: !GetAtt WebInstance2.PublicIp
+
+  WebInstance1Id:
+    Description: Instance ID - Web AZ1
+    Value: !Ref WebInstance1
+
+  WebInstance2Id:
+    Description: Instance ID - Web AZ2
+    Value: !Ref WebInstance2
+
+  AppInstance1Id:
+    Description: Instance ID - App AZ1
+    Value: !Ref AppInstance1
+
+  AppInstance2Id:
+    Description: Instance ID - App AZ2
+    Value: !Ref AppInstance2
+
+  SSMConnectCommand:
+    Description: Example SSM connect command. Replace INSTANCE_ID with the target instance ID.
+    Value: !Sub "aws ssm start-session --target INSTANCE_ID --region ${AWS::Region}"

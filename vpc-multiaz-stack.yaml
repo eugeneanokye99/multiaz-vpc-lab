@@ -24,16 +24,16 @@ Metadata:
           - LabName
           - ProjectTag
     ParameterLabels:
-      VpcCidr:           { default: "VPC CIDR Block" }
-      PublicSubnet1Cidr: { default: "Public Subnet AZ-1 CIDR" }
-      PublicSubnet2Cidr: { default: "Public Subnet AZ-2 CIDR" }
+      VpcCidr:            { default: "VPC CIDR Block" }
+      PublicSubnet1Cidr:  { default: "Public Subnet AZ-1 CIDR" }
+      PublicSubnet2Cidr:  { default: "Public Subnet AZ-2 CIDR" }
       PrivateSubnet1Cidr: { default: "Private Subnet AZ-1 CIDR" }
       PrivateSubnet2Cidr: { default: "Private Subnet AZ-2 CIDR" }
-      InstanceType:      { default: "EC2 Instance Type" }
-      LatestAmiId:       { default: "Amazon Linux 2 AMI (SSM Parameter)" }
-      StudentName:       { default: "Your Full Name (shown on webpage)" }
-      LabName:           { default: "Lab Name (shown on webpage)" }
-      ProjectTag:        { default: "Project Tag Value" }
+      InstanceType:       { default: "EC2 Instance Type" }
+      LatestAmiId:        { default: "Amazon Linux 2 AMI (SSM Parameter)" }
+      StudentName:        { default: "Your Full Name (shown on webpage)" }
+      LabName:            { default: "Lab Name (shown on webpage)" }
+      ProjectTag:         { default: "Project Tag Value" }
 
 Parameters:
 
@@ -75,7 +75,7 @@ Parameters:
 
   StudentName:
     Type: String
-    Default: "Eugene Anokye"
+    Default: "Jane Doe"
     Description: Full name displayed on the Apache web page.
 
   LabName:
@@ -375,10 +375,8 @@ Resources:
   WebInstance1:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType:
-        Ref: InstanceType
-      ImageId: 
-        Ref: LatestAmiId
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
       SubnetId: !Ref PublicSubnet1
       IamInstanceProfile: !Ref SSMInstanceProfile
       SecurityGroupIds:
@@ -398,13 +396,10 @@ Resources:
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>${LabName}</title>
             <style>
-              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto;
-                     background: #f0f4f8; color: #333; text-align: center; }
-              .card { background: white; border-radius: 12px; padding: 40px;
-                      box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; background: #f0f4f8; color: #333; text-align: center; }
+              .card { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
               h1 { color: #1a73e8; }
-              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8;
-                       padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
+              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8; padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
               .az { font-size: 0.85em; color: #666; margin-top: 20px; }
             </style>
           </head>
@@ -413,7 +408,7 @@ Resources:
               <h1>&#x1F310; ${LabName}</h1>
               <p><strong>Student:</strong> ${StudentName}</p>
               <span class="badge">Web Server - AZ1</span>
-              <p class="az">Instance: $(hostname -f) &nbsp;|&nbsp; AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+              <p class="az">Instance: $(hostname -f) | AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
             </div>
           </body>
           </html>
@@ -452,13 +447,10 @@ Resources:
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>${LabName}</title>
             <style>
-              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto;
-                     background: #f0f4f8; color: #333; text-align: center; }
-              .card { background: white; border-radius: 12px; padding: 40px;
-                      box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; background: #f0f4f8; color: #333; text-align: center; }
+              .card { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
               h1 { color: #1a73e8; }
-              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8;
-                       padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
+              .badge { display: inline-block; background: #e8f0fe; color: #1a73e8; padding: 6px 16px; border-radius: 20px; margin-top: 12px; }
               .az { font-size: 0.85em; color: #666; margin-top: 20px; }
             </style>
           </head>
@@ -467,7 +459,7 @@ Resources:
               <h1>&#x1F310; ${LabName}</h1>
               <p><strong>Student:</strong> ${StudentName}</p>
               <span class="badge">Web Server - AZ2</span>
-              <p class="az">Instance: $(hostname -f) &nbsp;|&nbsp; AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+              <p class="az">Instance: $(hostname -f) | AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
             </div>
           </body>
           </html>

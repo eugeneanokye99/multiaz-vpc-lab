@@ -75,7 +75,7 @@ Parameters:
 
   StudentName:
     Type: String
-    Default: "Jane Doe"
+    Default: "Eugene Anokye"
     Description: Full name displayed on the Apache web page.
 
   LabName:

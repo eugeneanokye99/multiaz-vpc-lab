@@ -1,8 +1,3 @@
-template-file-path: ./vpc-multiaz-stack.yaml
-parameters:
-  StudentName: "Eugene Anokye"
-  LabName: "Multi-AZ VPC Lab"
-tags:
-  Project: MultiAZ-VPC-Lab
-  Environment: Lab
-  ManagedBy: CloudFormation-GitSync
+template-file-path: vpc-multiaz-stack.yaml
+parameters: {}
+tags: {}

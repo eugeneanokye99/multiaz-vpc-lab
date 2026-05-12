@@ -228,7 +228,7 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          dnf install -y httpd
+          yum install -y httpd
           systemctl enable httpd
           systemctl start httpd
           # Fetch the latest metadata token for EC2 instance metadata service (IMDSv2)
@@ -253,7 +253,7 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          dnf install -y httpd
+          yum install -y httpd
           systemctl enable httpd
           systemctl start httpd
           # Fetch the latest metadata token for EC2 instance metadata service (IMDSv2)
